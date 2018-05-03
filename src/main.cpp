@@ -4,40 +4,42 @@
 #include <hpx/include/iostreams.hpp>
 #include <hpx/include/components.hpp>
 #include <hpx/include/lcos.hpp>
+#include <hpx/include/serialization.hpp>
 
 #include <tuple>
 
-struct Component : public hpx::components::simple_component_base<Component> {
-    std::tuple<> empty;
-};
+HPX_REGISTER_CHANNEL(int);
 
-struct Client
-    : public hpx::components::client_base<Client, Component> {
-    using BaseType = hpx::components::client_base<Client,Component>;
-
-    Client()=default;
-    Client(hpx::future<hpx::id_type>&& id) : BaseType(std::move(id)) {}
-
-};
-
-
-struct A {
-    static Client client;
-};
-
-Client A::client = Client();
-
-HPX_REGISTER_COMPONENT(hpx::components::simple_component<Component>, Component);
 
 int hpx_main(int argc, char* argv[]) {
 
-    hpx::future<hpx::id_type> _id = hpx::new_<hpx::components::simple_component<Component>>(
-        hpx::find_here());
+    hpx::lcos::channel<int> c(hpx::find_here());
+    c.set(1);
 
-    A::client = Client(std::move(_id));
 
-    hpx::future<void> registration_future = A::client.register_as("thing");
-    registration_future.get();
+    //santity check (this works)
+    /*if ( c.get().get() != 1 ) {
+        std::cerr << "Error Values not equal\n";
+    } */
+
+    //sanity check #2 (this works)
+    /*auto c3 = c;
+    if ( c3.get().get() != 1 ) {
+        std::cerr << "Error Values not equal\n";
+        }*/
+
+    std::vector<char> buffer;
+    hpx::serialization::output_archive oarchive(buffer);
+    oarchive << c;
+
+    hpx::serialization::input_archive iarchive(buffer);
+    hpx::lcos::channel<int> c2;
+    iarchive >> c2;
+
+    if ( c2.get().get() != 1 ) {
+        std::cerr << "Error Values not equal\n";
+    }
+    
     return hpx::finalize();
 }
 
