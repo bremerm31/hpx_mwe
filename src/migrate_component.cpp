@@ -1,5 +1,6 @@
 //  Copyright (c) 2014-2016 Hartmut Kaiser
 //  Copyright (c)      2016 Thomas Heller
+//  Copyright (c)      2018 Maximilian Bremer
 //
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
@@ -35,9 +36,16 @@ struct test_server
         return hpx::find_here();
     }
 
-    void busy_work() const
+    void busy_work_impl()
     {
         hpx::this_thread::sleep_for(std::chrono::seconds(1));
+        ++data_;
+    }
+
+    hpx::future<void> busy_work()
+    {
+        //this->pin();
+        return hpx::async(&test_server::busy_work_impl,this);//.then([this](auto&&){this->unpin();});
     }
 
     int get_data() const
@@ -112,7 +120,7 @@ struct test_client
         return call_action()(this->get_id());
     }
 
-    hpx::future<void> busy_work() const
+    hpx::future<void> busy_work()
     {
         return hpx::async<busy_work_action>(this->get_id());
     }
@@ -122,39 +130,6 @@ struct test_client
         return get_data_action()(this->get_id());
     }
 };
-
-///////////////////////////////////////////////////////////////////////////////
-bool test_migrate_component(hpx::id_type source, hpx::id_type target)
-{
-    // create component on given locality
-    test_client t1 = hpx::new_<test_client>(source, 42);
-    HPX_TEST_NEQ(hpx::naming::invalid_id, t1.get_id());
-
-    // the new object should live on the source locality
-    HPX_TEST_EQ(t1.call(), source);
-    HPX_TEST_EQ(t1.get_data(), 42);
-
-    try {
-        // migrate t1 to the target
-        test_client t2(hpx::components::migrate(t1, target));
-
-        // wait for migration to be done
-        HPX_TEST_NEQ(hpx::naming::invalid_id, t2.get_id());
-
-        // the migrated object should have the same id as before
-        HPX_TEST_EQ(t1.get_id(), t2.get_id());
-
-        // the migrated object should live on the target now
-        HPX_TEST_EQ(t2.call(), target);
-        HPX_TEST_EQ(t2.get_data(), 42);
-    }
-    catch (hpx::exception const& e) {
-        hpx::cout << hpx::get_error_what(e) << std::endl;
-        return false;
-    }
-
-    return true;
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 bool test_migrate_busy_component(hpx::id_type source, hpx::id_type target)
@@ -184,15 +159,17 @@ bool test_migrate_busy_component(hpx::id_type source, hpx::id_type target)
 
         // the migrated object should live on the target now
         HPX_TEST_EQ(t2.call(), target);
-        HPX_TEST_EQ(t2.get_data(), 42);
+
+        // the busy work should be finished by now, wait anyways
+        busy_work.wait();
+
+        //busy work increments data_ by 1
+        HPX_TEST_EQ(t2.get_data(), 43);
     }
     catch (hpx::exception const& e) {
         hpx::cout << hpx::get_error_what(e) << std::endl;
         return false;
     }
-
-    // the busy work should be finished by now, wait anyways
-    busy_work.wait();
 
     return true;
 }
@@ -243,7 +220,7 @@ bool test_migrate_component2(hpx::id_type source, hpx::id_type target)
     return true;
 }
 
-bool test_migrate_busy_component2(hpx::id_type source, hpx::id_type target)
+/*bool test_migrate_busy_component2(hpx::id_type source, hpx::id_type target)
 {
     test_client t1 = hpx::new_<test_client>(source, 42);
     HPX_TEST_NEQ(hpx::naming::invalid_id, t1.get_id());
@@ -313,20 +290,12 @@ bool test_migrate_busy_component2(hpx::id_type source, hpx::id_type target)
     }
 
     return true;
-}
+    }*/
 
 ///////////////////////////////////////////////////////////////////////////////
 int main()
 {
     std::vector<hpx::id_type> localities = hpx::find_remote_localities();
-
-    for (hpx::id_type const& id : localities)
-    {
-        hpx::cout << "test_migrate_component: ->" << id << std::endl;
-        HPX_TEST(test_migrate_component(hpx::find_here(), id));
-        hpx::cout << "test_migrate_component: <-" << id << std::endl;
-        HPX_TEST(test_migrate_component(id, hpx::find_here()));
-    }
 
     for (hpx::id_type const& id : localities)
     {
@@ -336,22 +305,14 @@ int main()
         HPX_TEST(test_migrate_busy_component(id, hpx::find_here()));
     }
 
-    for (hpx::id_type const& id : localities)
-    {
-        hpx::cout << "test_migrate_component2: ->" << id << std::endl;
-        HPX_TEST(test_migrate_component2(hpx::find_here(), id));
-        hpx::cout << "test_migrate_component2: <-" << id << std::endl;
-        HPX_TEST(test_migrate_component2(id, hpx::find_here()));
-    }
-
-    for (hpx::id_type const& id : localities)
+/*    for (hpx::id_type const& id : localities)
     {
         hpx::cout << "test_migrate_busy_component2: ->" << id << std::endl;
         HPX_TEST(test_migrate_busy_component2(hpx::find_here(), id));
         hpx::cout << "test_migrate_busy_component2: <-" << id << std::endl;
         HPX_TEST(test_migrate_busy_component2(id, hpx::find_here()));
     }
-
+*/
     return hpx::util::report_errors();
 }
 
