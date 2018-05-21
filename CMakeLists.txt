@@ -21,7 +21,7 @@ find_package(HPX REQUIRED)
 
 add_executable(
   DG_HYPER_SWE_HPX
-  ${PROJECT_SOURCE_DIR}/src/main.cpp
+  ${PROJECT_SOURCE_DIR}/src/migrate_component.cpp
 )
 
 hpx_setup_target(
