@@ -177,6 +177,9 @@ bool test_migrate_busy_component(hpx::id_type source, hpx::id_type target)
 
         HPX_TEST_EQ(t2.get_data(), 42); //get data from component
 
+
+        // If this is true, the mini-app runs
+        // If this is false, AGAS seems to hang
         if (false) {
             HPX_TEST_EQ(t2.get_data(), 42);
         } else {
