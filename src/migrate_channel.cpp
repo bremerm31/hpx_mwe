@@ -15,6 +15,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -29,8 +30,15 @@ struct test_server
     typedef hpx::components::migration_support<
             hpx::components::component_base<test_server>
         > base_type;
+    test_server() = default;
 
-    test_server() : c(hpx::find_here()) {}
+    test_server(hpx::id_type id) : c(hpx::find_here()) {
+        std::stringstream s;
+        s << id;
+        std::string channel_name{"foobar_"+s.str()};
+        hpx::cout << "Registering channel under name: " << channel_name << hpx::endl;
+        c.register_as(channel_name).get();
+    }
     ~test_server() {}
 
     hpx::id_type call() const
@@ -130,16 +138,26 @@ struct test_client
 ///////////////////////////////////////////////////////////////////////////////
 bool test_migrate_busy_component(hpx::id_type source, hpx::id_type target)
 {
+    hpx::lcos::channel<int> c2;
+    {
+        std::stringstream s;
+        s << source;
+        std::string channel_name{"foobar_"+s.str()};
+        hpx::cout << "Connecting to channel: " << channel_name << hpx::endl;
+        c2.connect_to("foobar");
+    }
+
     // create component on given locality
-    test_client t1 = hpx::new_<test_client>(source);
+    test_client t1 = hpx::new_<test_client>(source, source);
     HPX_TEST_NEQ(hpx::naming::invalid_id, t1.get_id());
 
     // the new object should live on the source locality
     HPX_TEST_EQ(t1.call(), source);
-    //HPX_TEST_EQ(t1.get_data(), 42);
 
     // add some concurrent busy work
-    hpx::future<void> busy_work = t1.busy_work(42);
+    hpx::future<void> busy_work = t1.busy_work(42).then([&t1](auto&& f) {
+            return t1.busy_work(42);
+            });
 
     try {
         // migrate t1 to the target
@@ -157,7 +175,13 @@ bool test_migrate_busy_component(hpx::id_type source, hpx::id_type target)
         // the busy work should be finished by now, wait anyways
         busy_work.wait();
 
-        HPX_TEST_EQ(t2.get_data(), 42);
+        HPX_TEST_EQ(t2.get_data(), 42); //get data from component
+
+        if (false) {
+            HPX_TEST_EQ(t2.get_data(), 42);
+        } else {
+            HPX_TEST_EQ(c2.get(hpx::launch::sync), 42); //get data from client connected to channel
+        }
     }
     catch (hpx::exception const& e) {
         hpx::cout << hpx::get_error_what(e) << std::endl;
@@ -168,7 +192,7 @@ bool test_migrate_busy_component(hpx::id_type source, hpx::id_type target)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-int main()
+int hpx_main()
 {
     std::vector<hpx::id_type> localities = hpx::find_remote_localities();
 
@@ -180,6 +204,11 @@ int main()
         HPX_TEST(test_migrate_busy_component(id, hpx::find_here()));
     }
 
-    return hpx::util::report_errors();
+    std::cout << hpx::util::report_errors() << std::endl;
+    return hpx::finalize();
 }
 
+///////////////////////////////////////////////////////////////////////////////
+int main() {
+    return hpx::init();
+}
