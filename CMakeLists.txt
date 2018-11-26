@@ -19,17 +19,38 @@ endif()
 
 find_package(HPX REQUIRED)
 
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
+add_definitions(-g -Wall -std=c++14)
+
+##################################################################
+# inheritance_2_classes_concrete_simple
 add_executable(
-  DG_HYPER_SWE_HPX
-  ${PROJECT_SOURCE_DIR}/src/migrate_channel.cpp
+  inheritance_2_classes_concrete_simple
+  ${PROJECT_SOURCE_DIR}/src/inheritance_2_classes_concrete_simple.cpp
 )
 
 hpx_setup_target(
-  DG_HYPER_SWE_HPX
+  inheritance_2_classes_concrete_simple
   COMPONENT_DEPENDENCIES iostreams
 )
 
-target_include_directories(DG_HYPER_SWE_HPX PRIVATE ${HPX_INCLUDE_DIRS})
-target_link_libraries(DG_HYPER_SWE_HPX ${HPX_LIBRARIES})
+target_include_directories(inheritance_2_classes_concrete_simple PRIVATE ${HPX_INCLUDE_DIRS})
+target_link_libraries(inheritance_2_classes_concrete_simple ${HPX_LIBRARIES})
+
+##################################################################
+# migrate_polymorphic_component
+add_executable(
+  migrate_polymorphic_component
+  ${PROJECT_SOURCE_DIR}/src/migrate_polymorphic_component.cpp
+)
+
+hpx_setup_target(
+  migrate_polymorphic_component
+  COMPONENT_DEPENDENCIES iostreams
+)
+
+target_include_directories(migrate_polymorphic_component PRIVATE ${HPX_INCLUDE_DIRS})
+target_link_libraries(migrate_polymorphic_component ${HPX_LIBRARIES})
 
 
